@@ -66,6 +66,10 @@ class SelectorBIC(ModelSelector):
 
     http://www2.imm.dtu.dk/courses/02433/doc/ch6_slides.pdf
     Bayesian information criteria: BIC = -2 * logL + p * logN
+
+    (own comment added:)
+    where L is the likelihood of the fitted model, p is the number of parameters,
+    and N is the number of data points.
     """
 
     def select(self):
@@ -77,7 +81,17 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on BIC scores
-        raise NotImplementedError
+        current_best_model = train_a_model(list_of_params_to_test[0])
+        current_best_model_score = current_best_model.score
+
+        for n_parameters in list_of_params_to_test[1:]:
+            current_model = train_a_model(number_of_params)
+            current_model_score = current_model.score
+
+            if current_model.score > current_best_model.score:
+                current_best_model = current_model
+
+        return current_best_model
 
 
 class SelectorDIC(ModelSelector):
