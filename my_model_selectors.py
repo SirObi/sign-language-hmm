@@ -81,17 +81,34 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on BIC scores
-        current_best_model = train_a_model(list_of_params_to_test[0])
-        current_best_model_score = current_best_model.score
+        min_states = self.min_n_components
+        max_states = self.max_n_components
+        list_of_params_to_test = np.arange(min_states, max_states + 1)
+
+        current_best_model = self.base_model(list_of_params_to_test[0]).fit(self.X, self.lengths)
+        current_best_score = current_best_model.score(self.X, self.lengths)
+        print(current_best_score)
 
         for n_parameters in list_of_params_to_test[1:]:
-            current_model = train_a_model(number_of_params)
-            current_model_score = current_model.score
+            try:
+                current_model = self.base_model(n_parameters).fit(self.X, self.lengths)
+                model_score = current_model.score(self.X, self.lengths)
+                print("Model score: ", model_score)
 
-            if current_model.score > current_best_model.score:
-                current_best_model = current_model
+                if model_score > current_best_score:
+                    current_best_model = current_model
+            except:
+                continue
 
         return current_best_model
+
+        # Currently getting an error for this code for n_params = 6
+        # `rows of transmat_ must sum to 1.0 (got [ 1.  1.  1.  1.  0.  1.])`
+        # Apparently, this is a problem with the library.
+        '''
+        katie_tiwariForum MentorJul '17
+        @AnselmoT It could be the case for the word you are trying, there is not enough data.
+        Please use try/except block to catch these errors in for loop of number of components.'''
 
 
 class SelectorDIC(ModelSelector):
