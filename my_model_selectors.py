@@ -72,6 +72,15 @@ class SelectorBIC(ModelSelector):
     and N is the number of data points.
     """
 
+    def calculate_bic(self, model, n):
+        score = model.score(self.X, self.lengths)
+        log_n = np.log(len(self.X))
+        d = model.n_features
+        p = n ** 2 + 2 * d * n - 1
+
+        bic = -2.0 * score + p * log_n
+        return bic
+
     def select(self):
         """ select the best model for self.this_word based on
         BIC score for n between self.min_n_components and self.max_n_components
@@ -81,34 +90,31 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on BIC scores
-        min_states = self.min_n_components
-        max_states = self.max_n_components
-        list_of_params_to_test = np.arange(min_states, max_states + 1)
+        n_components = np.arange(self.min_n_components, self.max_n_components + 1)
 
-        current_best_model = self.base_model(list_of_params_to_test[0]).fit(self.X, self.lengths)
-        current_best_score = current_best_model.score(self.X, self.lengths)
-        print(current_best_score)
+        current_best_model = self.base_model(n_components[0]).fit(self.X, self.lengths)
+        current_best_score = self.calculate_bic(current_best_model, n_components[0])
+        print("Initial best score: ", current_best_score)
 
-        for n_parameters in list_of_params_to_test[1:]:
+        for n in n_components[1:]:
             try:
-                current_model = self.base_model(n_parameters).fit(self.X, self.lengths)
-                model_score = current_model.score(self.X, self.lengths)
-                print("Model score: ", model_score)
+                this_model = self.base_model(n).fit(self.X, self.lengths)
+                model_score = self.calculate_bic(this_model, n)
+                print("Model score for {} hidden states: ".format(n), model_score)
 
                 if model_score > current_best_score:
-                    current_best_model = current_model
+                    current_best_model = this_model
             except:
                 continue
 
         return current_best_model
 
-        # Currently getting an error for this code for n_params = 6
+        # Was getting an error for this code for n_params = 6
         # `rows of transmat_ must sum to 1.0 (got [ 1.  1.  1.  1.  0.  1.])`
         # Apparently, this is a problem with the library.
-        '''
-        katie_tiwariForum MentorJul '17
-        @AnselmoT It could be the case for the word you are trying, there is not enough data.
-        Please use try/except block to catch these errors in for loop of number of components.'''
+        # katie_tiwariForum MentorJul '17
+        # @AnselmoT It could be the case for the word you are trying, there is not enough data.
+        # Please use try/except block to catch these errors in for loop of number of components.
 
 
 class SelectorDIC(ModelSelector):
@@ -132,9 +138,46 @@ class SelectorCV(ModelSelector):
     ''' select best model based on average log Likelihood of cross-validation folds
 
     '''
+    def get_training_and_test(self):
+        scores = []
+        split_method = KFold(n_splits=2)
+
+        for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+            tr_X, tr_lengths = combine_sequences(cv_train_idx, self.sequences)
+            ts_X, ts_lengths = combine_sequences(cv_test_idx, self.sequences)
+
+        return [(tr_X, tr_lengths), (ts_X, ts_lengths)]
+
+    def calculate_cv_avg(self, model):
+        training_set, test_set = self.get_training_and_test()
+        ts_X, ts_lengths = test_set
+        scores = []
+        scores.append(model.score(ts_X, ts_lengths))
+        return np.mean(scores)
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection using CV
-        raise NotImplementedError
+        n_components = np.arange(self.min_n_components, self.max_n_components + 1)
+
+        training_set, test_set = self.get_training_and_test()
+
+        tr_X, tr_lengths = training_set
+        current_best_model = self.base_model(n_components[0]).fit(tr_X, tr_lengths)
+
+        current_best_score = self.calculate_cv_avg(current_best_model)
+        print("Initial best score: ", current_best_score)
+
+        for n in n_components[1:]:
+            try:
+                this_model = self.base_model(n).fit(tr_X, tr_lengths)
+                model_score = self.calculate_cv_avg(this_model)
+                print("Model score for {} hidden states: ".format(n), model_score)
+
+                if model_score > current_best_score:
+                    current_best_model = this_model
+            except:
+                continue
+
+        return current_best_model
