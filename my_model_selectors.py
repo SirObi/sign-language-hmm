@@ -92,15 +92,13 @@ class SelectorBIC(ModelSelector):
         # TODO implement model selection based on BIC scores
         n_components = np.arange(self.min_n_components, self.max_n_components + 1)
 
-        current_best_model = self.base_model(n_components[0]).fit(self.X, self.lengths)
+        current_best_model = self.base_model(n_components[0])
         current_best_score = self.calculate_bic(current_best_model, n_components[0])
-        print("Initial best score: ", current_best_score)
 
         for n in n_components[1:]:
             try:
-                this_model = self.base_model(n).fit(self.X, self.lengths)
+                this_model = self.base_model(n)
                 model_score = self.calculate_bic(this_model, n)
-                print("Model score for {} hidden states: ".format(n), model_score)
 
                 if model_score > current_best_score:
                     current_best_model = this_model
@@ -126,12 +124,50 @@ class SelectorDIC(ModelSelector):
     https://pdfs.semanticscholar.org/ed3d/7c4a5f607201f3848d4c02dd9ba17c791fc2.pdf
     DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
     '''
+    '''Own note:
+    The Discriminative Information Criterion has been proposed as a replacement for the
+    Bayesian Information Criterion. The author points out experimental evidence that
+    applying the Occam's razor and Bayesian-based selection criteria to classification problems
+    often does not result in selecting the best model.
+
+    Quote: "The goal is not to select the simplest model that best explains the data,
+    but to select the model that is the less likely to have generated data belonging to
+    competing classification categories."
+
+    "The model selection problem consists of selecting a single topology T as sole representative of the class C. "
+
+    '''
+
+    def calculate_dic(self, model, n):
+        score = model.score(self.X, self.lengths)
+        other_words_scores = []
+        for word in self.words:
+            if word != self.this_word:
+                other_words_scores.append(model.score(self.hwords[word][0], self.hwords[word][1]))
+
+        return score - np.mean(other_words_scores)
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+
+        n_components = np.arange(self.min_n_components, self.max_n_components + 1)
+
+        current_best_model = self.base_model(n_components[0])
+        current_best_score = self.calculate_dic(current_best_model, n_components[0])
+
+        for n in n_components[1:]:
+            try:
+                this_model = self.base_model(n)
+                model_score = self.calculate_dic(this_model, n)
+
+                if model_score > current_best_score:
+                    current_best_model = this_model
+            except:
+                continue
+
+        return current_best_model
 
 
 class SelectorCV(ModelSelector):
@@ -167,13 +203,11 @@ class SelectorCV(ModelSelector):
         current_best_model = self.base_model(n_components[0]).fit(tr_X, tr_lengths)
 
         current_best_score = self.calculate_cv_avg(current_best_model)
-        print("Initial best score: ", current_best_score)
 
         for n in n_components[1:]:
             try:
                 this_model = self.base_model(n).fit(tr_X, tr_lengths)
                 model_score = self.calculate_cv_avg(this_model)
-                print("Model score for {} hidden states: ".format(n), model_score)
 
                 if model_score > current_best_score:
                     current_best_model = this_model
